@@ -1,0 +1,4 @@
+github.com/adhocore/jsonc v0.10.0 h1:YjNX9TojBfxQJ4kuoiNqVR5SFqu1YBEMsm+HxWnxbOI=
+github.com/adhocore/jsonc v0.10.0/go.mod h1:Ar4gd3i83+1Z+5M5SG6Vrfw9q3TO544OwLXH4+ZhWTE=
+golang.org/x/text v0.37.0 h1:Cqjiwd9eSg8e0QAkyCaQTNHFIIzWtidPahFWR83rTrc=
+golang.org/x/text v0.37.0/go.mod h1:a5sjxXGs9hsn/AJVwuElvCAo9v8QYLzvavO5z2PiM38=
