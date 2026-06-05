@@ -17,3 +17,4 @@ go get github.com/lonevle/gokit
 | [convert](convert/README.md) | `github.com/lonevle/gokit/convert` | 编码转换（BOM 处理、GBK/UTF-8 转换） | `golang.org/x/text` |
 | [iis](iis/README.md) | `github.com/lonevle/gokit/iis` | IIS 管理（应用池/网站启停） | 零依赖 |
 | [netx](netx/README.md) | `github.com/lonevle/gokit/netx` | 网络工具（IP 地址判断） | 零依赖 |
+| [shell](shell/README.md) | `github.com/lonevle/gokit/shell` | PowerShell / CMD 命令行调用 | 零依赖 |
