@@ -30,10 +30,14 @@ go get github.com/lonevle/gokit/crypto
 
 | 函数 | 签名 | 说明 |
 |------|------|------|
-| GCM_Encrypt | `GCM_Encrypt(plaintext, key []byte) ([]byte, error)` | 加密字节切片，输出格式: nonceLen(4B) + nonce + ciphertext+tag |
-| GCM_Decrypt | `GCM_Decrypt(data, key []byte) ([]byte, error)` | 解密字节切片，自动验证 tag |
+| GCM_Encrypt | `GCM_Encrypt(plaintext, key []byte) ([]byte, error)` | 加密字节切片，输出格式: 版本(1B) + nonce(12B) + ciphertext+tag，自带完整性认证 |
+| GCM_Decrypt | `GCM_Decrypt(data, key []byte) ([]byte, error)` | 解密字节切片，自动验证 tag，验证失败返回 ErrCorrupted |
+| GCM_EncryptWithAAD | `GCM_EncryptWithAAD(plaintext, aad, key []byte) ([]byte, error)` | 加密并绑定附加认证数据（关联字段防篡改） |
+| GCM_DecryptWithAAD | `GCM_DecryptWithAAD(data, aad, key []byte) ([]byte, error)` | 解密并校验 aad，aad 与加密时不一致返回 ErrCorrupted |
 | GCM_EncryptFile | `GCM_EncryptFile(inPath, outPath string, key []byte) error` | 加密文件（一次性读取） |
 | GCM_DecryptFile | `GCM_DecryptFile(inPath, outPath string, key []byte) error` | 解密文件（一次性读取） |
+
+> AAD（附加认证数据）参与完整性校验但不加密，用于把密文之外的关联字段（如协议头、用户 ID 等明文字段）纳入防篡改范围。解密时必须传入与加密时一致的 aad。
 
 ### AES-CTR+HMAC（流式，低内存，带认证）
 
@@ -97,6 +101,19 @@ if err != nil {
 	// 处理错误
 }
 
+// AES-GCM 加密并绑定关联字段（如协议头），关联字段被篡改时解密失败
+aad := []byte("user:10001|action:transfer")
+ciphertext, err := crypto.GCM_EncryptWithAAD([]byte("机密数据"), aad, key)
+if err != nil {
+	// 处理错误
+}
+
+// 解密时必须传入一致的 aad
+plaintext, err := crypto.GCM_DecryptWithAAD(ciphertext, aad, key)
+if err != nil {
+	// aad 不一致或密文被篡改，返回 ErrCorrupted
+}
+
 // AES-CTR+HMAC 流式加密并认证文件（带认证，适合大文件）
 err = crypto.CTRHMAC_EncryptFile("/path/to/file.txt", "/path/to/file.txt.hmac", key)
 if err != nil {
@@ -117,4 +134,5 @@ if err != nil {
 | 大文件加密 | CTR / CTR+HMAC | 流式处理，内存占用低 |
 | 中小文件加密 | GCM | 标准推荐，自带认证，API 简洁 |
 | 需要完整性认证 | GCM / CTR+HMAC | 自动检测篡改 |
+| 明文关联字段防篡改 | GCM + AAD | 协议头等关联字段纳入认证范围 |
 | 仅需要保密性 | CTR | 无认证开销，性能最好 |

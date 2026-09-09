@@ -3,72 +3,99 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
-	"encoding/binary"
+	"crypto/rand"
+	"fmt"
 	"os"
 )
 
-// GCM 格式: [4:nonceLen][变长:nonce][变长:ciphertext+tag]
+// GCM 报文格式: [1B 版本][12B nonce][NB 密文+tag]
+const (
+	gcmVersionV1 = 1  // 报文格式版本号
+	gcmNonceLen  = 12 // GCM 标准 nonce 长度
+)
 
-// GCM_Encrypt 加密字节切片
-func GCM_Encrypt(plaintext, key []byte) ([]byte, error) {
-	if err := checkKey(key); err != nil {
-		return nil, err
-	}
-
+// newGCM 根据密钥创建 AES-GCM 实例
+func newGCM(key []byte) (cipher.AEAD, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
 		return nil, err
 	}
-
-	gcm, err := cipher.NewGCM(block)
-	if err != nil {
-		return nil, err
-	}
-
-	nonce, err := randomBytes(gcm.NonceSize())
-	if err != nil {
-		return nil, err
-	}
-
-	ciphertext := gcm.Seal(nil, nonce, plaintext, nil)
-
-	// 输出: nonceLen(4 bytes) || nonce || ciphertext
-	out := make([]byte, 4+len(nonce)+len(ciphertext))
-	binary.BigEndian.PutUint32(out[:4], uint32(len(nonce)))
-	copy(out[4:], nonce)
-	copy(out[4+len(nonce):], ciphertext)
-
-	return out, nil
+	return cipher.NewGCM(block)
 }
 
-// GCM_Decrypt 解密字节切片
-func GCM_Decrypt(data, key []byte) ([]byte, error) {
+// GCM_Encrypt 加密字节切片
+//
+// GCM 为认证加密模式，自带完整性保护，密文被篡改时解密会失败。
+// 输出格式: [1B 版本][12B nonce][NB 密文+tag]
+func GCM_Encrypt(plaintext, key []byte) ([]byte, error) {
+	return gcmEncrypt(plaintext, nil, key)
+}
+
+// GCM_EncryptWithAAD 加密字节切片并绑定附加认证数据
+//
+// aad 参与完整性校验但不加密，用于把密文之外的关联字段（如协议头、
+// 用户 ID 等明文字段）纳入防篡改范围，这些字段被篡改时解密失败。
+// 解密时必须传入与加密时一致的 aad。
+func GCM_EncryptWithAAD(plaintext, aad, key []byte) ([]byte, error) {
+	return gcmEncrypt(plaintext, aad, key)
+}
+
+// gcmEncrypt AES-GCM 加密内部实现
+func gcmEncrypt(plaintext, aad, key []byte) ([]byte, error) {
 	if err := checkKey(key); err != nil {
 		return nil, err
 	}
-	if len(data) < 4 {
-		return nil, ErrShortData
-	}
 
-	nonceSize := binary.BigEndian.Uint32(data[:4])
-	if len(data) < int(4+nonceSize) {
-		return nil, ErrShortData
-	}
-
-	nonce := data[4 : 4+nonceSize]
-	ciphertext := data[4+nonceSize:]
-
-	block, err := aes.NewCipher(key)
+	gcm, err := newGCM(key)
 	if err != nil {
 		return nil, err
 	}
 
-	gcm, err := cipher.NewGCMWithNonceSize(block, int(nonceSize))
+	// 预分配: 1(版本) + 12(nonce) + 明文 + tag，nonce 直接生成在输出缓冲区内
+	out := make([]byte, 1+gcmNonceLen, 1+gcmNonceLen+len(plaintext)+gcm.Overhead())
+	out[0] = gcmVersionV1
+	nonce := out[1 : 1+gcmNonceLen]
+	if _, err := rand.Read(nonce); err != nil {
+		return nil, fmt.Errorf("crypto: 生成 nonce 失败: %w", err)
+	}
+	return gcm.Seal(out, nonce, plaintext, aad), nil
+}
+
+// GCM_Decrypt 解密字节切片，自动校验 tag
+//
+// 报文格式不匹配、版本不支持、密文被篡改或密钥错误均返回错误。
+func GCM_Decrypt(data, key []byte) ([]byte, error) {
+	return gcmDecrypt(data, nil, key)
+}
+
+// GCM_DecryptWithAAD 解密字节切片，aad 必须与加密时一致，否则解密失败
+func GCM_DecryptWithAAD(data, aad, key []byte) ([]byte, error) {
+	return gcmDecrypt(data, aad, key)
+}
+
+// gcmDecrypt AES-GCM 解密内部实现
+func gcmDecrypt(data, aad, key []byte) ([]byte, error) {
+	if err := checkKey(key); err != nil {
+		return nil, err
+	}
+	if len(data) < 1+gcmNonceLen {
+		return nil, ErrShortData
+	}
+	if data[0] != gcmVersionV1 {
+		return nil, fmt.Errorf("crypto: 不支持的报文版本 %d", data[0])
+	}
+
+	gcm, err := newGCM(key)
 	if err != nil {
 		return nil, err
 	}
 
-	return gcm.Open(nil, nonce, ciphertext, nil)
+	nonce := data[1 : 1+gcmNonceLen]
+	plaintext, err := gcm.Open(nil, nonce, data[1+gcmNonceLen:], aad)
+	if err != nil {
+		return nil, ErrCorrupted
+	}
+	return plaintext, nil
 }
 
 // GCM_EncryptFile 加密文件（一次性读取，适合中小文件）

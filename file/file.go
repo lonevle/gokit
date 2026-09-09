@@ -26,23 +26,19 @@ func Exists(path string) (bool, error) {
 	return false, err
 }
 
-// ReadFile 读取文件并自动处理 BOM 和 GBK 编码转换
+// ReadFile 读取文件并统一转为 UTF-8（自动识别并处理 BOM 头和 GBK / UTF-16 等编码）
 // 参数:
 //   - filename: 文件路径
 //
 // 返回:
-//   - UTF-8 编码的字节数组
+//   - UTF-8 编码的字节数组（已剥离 BOM）
 //   - 错误信息
 func ReadFile(filename string) ([]byte, error) {
-	fileByte, err := convert.SkipBOM(filename)
+	fileByte, err := os.ReadFile(filename)
 	if err != nil {
 		return nil, err
 	}
-	u8b, err := convert.GBKToUTF8(fileByte)
-	if err != nil {
-		return nil, err
-	}
-	return u8b, nil
+	return convert.ToUTF8(fileByte)
 }
 
 // ReadJson 读取 JSON 文件，自动处理 BOM、GBK 编码转换并去除注释
