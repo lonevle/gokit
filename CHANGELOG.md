@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.0](https://github.com/lonevle/gokit/compare/v0.0.2...v0.1.0) (2026-09-09)
+
+
+### 🚀 Features
+
+* 编码结构更新，加解密优化 ([26be84a](https://github.com/lonevle/gokit/commit/26be84a6e7c83be78864f0e867209d44778d0daa))
+
 ## [0.0.2](https://github.com/lonevle/gokit/compare/v0.0.1...v0.0.2) (2026-06-05)
 
 
